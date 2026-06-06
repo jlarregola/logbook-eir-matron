@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="theme-color" content="#b3633f">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Logbook EIR Matrona</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="app-header">
+    <h1>Logbook EIR · Matrona</h1>
+    <p class="subtitle">HUTVC · Residencia Obstétrico-Ginecológica</p>
+  </header>
+
+  <main class="app-main">
+
+    <!-- PANTALLA 1: REGISTRO -->
+    <section id="screen-registro" class="screen">
+      <div id="registro-inicio">
+        <button id="btn-dictar" class="btn btn-voice btn-big">🎤 Dictar registro por voz</button>
+        <p id="voice-status" class="voice-status"></p>
+        <button id="btn-nuevo-registro" class="btn btn-primary btn-big">+ Nuevo registro manual</button>
+        <p class="hint">Dicta el registro hablando o rellena el formulario campo a campo. Todos los datos se guardan solo en este dispositivo.</p>
+      </div>
+
+      <form id="form-registro" class="hidden">
+        <div id="review-banner" class="review-banner hidden">
+          🎤 Hemos detectado estos datos a partir de tu voz. Revisa los campos resaltados, completa lo que falte y confirma para guardar.
+        </div>
+        <fieldset class="block">
+          <legend>Tipo de procedimiento</legend>
+          <label for="tipo">Tipo</label>
+          <select id="tipo" name="tipo" required>
+            <option value="">— Selecciona un tipo —</option>
+            <option value="parto_eutocico">Parto eutócico</option>
+            <option value="parto_alto_riesgo">Parto de alto riesgo</option>
+            <option value="parto_instrumental">Parto instrumental / cesárea</option>
+            <option value="control_prenatal">Control prenatal</option>
+            <option value="gestante_alto_riesgo">Gestante de alto riesgo</option>
+            <option value="puerpera">Puérpera</option>
+            <option value="recien_nacido">Recién nacido</option>
+            <option value="educacion_maternal">Educación maternal</option>
+            <option value="historia_clinica">Historia clínica reproductiva</option>
+            <option value="actividad_cualitativa">Actividad cualitativa (áreas 4/5/6)</option>
+          </select>
+        </fieldset>
+
+        <!-- BLOQUE A: Identificación (común) -->
+        <fieldset class="block" data-common="true">
+          <legend>A · Identificación</legend>
+
+          <label for="num_historia">Nº historia clínica</label>
+          <input type="text" id="num_historia" name="num_historia" inputmode="numeric" placeholder="Solo número (sin nombre)">
+
+          <label for="fecha_hora">Fecha y hora</label>
+          <input type="datetime-local" id="fecha_hora" name="fecha_hora" required>
+
+          <label for="rotacion">Rotación / Unidad</label>
+          <select id="rotacion" name="rotacion">
+            <option value="">—</option>
+            <option value="Paritorio">Paritorio</option>
+            <option value="Urgencias OG">Urgencias OG</option>
+            <option value="Puérperas">Puérperas</option>
+            <option value="Neonatología">Neonatología</option>
+            <option value="Riesgo Obstétrico">Riesgo Obstétrico</option>
+            <option value="Ginecología">Ginecología</option>
+            <option value="Atención Primaria">Atención Primaria</option>
+            <option value="Otro">Otro</option>
+          </select>
+
+          <label for="turno">Turno</label>
+          <select id="turno" name="turno">
+            <option value="">—</option>
+            <option value="Mañana">Mañana</option>
+            <option value="Tarde">Tarde</option>
+            <option value="Noche">Noche</option>
+            <option value="Guardia">Guardia</option>
+          </select>
+        </fieldset>
+
+        <!-- BLOQUE B - PARTO -->
+        <fieldset class="block" data-types="parto_eutocico,parto_alto_riesgo,parto_instrumental">
+          <legend>B · Datos obstétricos</legend>
+
+          <label for="semanas_parto">Semanas de gestación</label>
+          <input type="number" id="semanas_parto" name="semanas_gestacion_parto" min="0" max="45" placeholder="ej. 39">
+
+          <label>Paridad (G/P/A)</label>
+          <div class="grid-3">
+            <input type="number" id="gesta" name="gestaciones" min="0" placeholder="G">
+            <input type="number" id="para" name="partos_previos" min="0" placeholder="P">
+            <input type="number" id="aborto" name="abortos" min="0" placeholder="A">
+          </div>
+
+          <label for="presentacion_fetal">Presentación fetal</label>
+          <select id="presentacion_fetal" name="presentacion_fetal">
+            <option value="">—</option>
+            <option value="Cefálica">Cefálica</option>
+            <option value="Podálica">Podálica</option>
+            <option value="Transversa">Transversa</option>
+            <option value="Otra">Otra</option>
+          </select>
+
+          <label for="inicio_parto">Inicio del parto</label>
+          <select id="inicio_parto" name="inicio_parto">
+            <option value="">—</option>
+            <option value="Espontáneo">Espontáneo</option>
+            <option value="Inducido">Inducido</option>
+            <option value="Cesárea programada">Cesárea programada</option>
+          </select>
+
+          <label for="analgesia_epidural">Analgesia epidural</label>
+          <select id="analgesia_epidural" name="analgesia_epidural">
+            <option value="">—</option>
+            <option value="Sí">Sí</option>
+            <option value="No">No</option>
+          </select>
+
+          <label for="rotura_membranas">Rotura de membranas</label>
+          <select id="rotura_membranas" name="rotura_membranas">
+            <option value="">—</option>
+            <option value="Espontánea">Espontánea</option>
+            <option value="Artificial">Artificial</option>
+            <option value="Íntegras">Íntegras</option>
+          </select>
+        </fieldset>
+
+        <!-- Factor de riesgo (parto alto riesgo) -->
+        <fieldset class="block" data-types="parto_alto_riesgo">
+          <legend>Factor de alto riesgo</legend>
+          <label for="factor_riesgo_parto">Factor de riesgo</label>
+          <input type="text" id="factor_riesgo_parto" name="factor_riesgo" placeholder="ej. preeclampsia, diabetes gestacional...">
+        </fieldset>
+
+        <!-- BLOQUE C - PARTO EUTÓCICO -->
+        <fieldset class="block" data-types="parto_eutocico,parto_alto_riesgo">
+          <legend>C · Asistencia realizada (parto eutócico)</legend>
+
+          <label for="episiotomia">Episiotomía</label>
+          <select id="episiotomia" name="episiotomia">
+            <option value="">—</option>
+            <option value="Sí">Sí</option>
+            <option value="No">No</option>
+          </select>
+
+          <label for="desgarro_perineal">Desgarro perineal (grado)</label>
+          <select id="desgarro_perineal" name="desgarro_perineal">
+            <option value="">—</option>
+            <option value="Ninguno">Ninguno</option>
+            <option value="I">Grado I</option>
+            <option value="II">Grado II</option>
+            <option value="III">Grado III</option>
+            <option value="IV">Grado IV</option>
+          </select>
+
+          <label for="alumbramiento">Alumbramiento</label>
+          <select id="alumbramiento" name="alumbramiento">
+            <option value="">—</option>
+            <option value="Espontáneo">Espontáneo</option>
+            <option value="Dirigido">Dirigido</option>
+            <option value="Manual">Manual</option>
+          </select>
+
+          <label for="perdida_hematica">Pérdida hemática estimada (ml)</label>
+          <input type="number" id="perdida_hematica" name="perdida_hematica_ml" min="0" placeholder="ej. 250">
+
+          <label>Test de Apgar</label>
+          <div class="grid-2">
+            <input type="number" id="apgar_1" name="apgar_1min" min="0" max="10" placeholder="1 min">
+            <input type="number" id="apgar_5" name="apgar_5min" min="0" max="10" placeholder="5 min">
+          </div>
+
+          <label for="peso_rn">Peso del RN (gramos)</label>
+          <input type="number" id="peso_rn" name="peso_rn_gramos" min="0" placeholder="ej. 3200">
+
+          <label for="piel_con_piel">Contacto piel con piel</label>
+          <select id="piel_con_piel" name="contacto_piel_con_piel">
+            <option value="">—</option>
+            <option value="Sí">Sí</option>
+            <option value="No">No</option>
+          </select>
+        </fieldset>
+
+        <!-- BLOQUE C - PARTO INSTRUMENTAL / CESÁREA -->
+        <fieldset class="block" data-types="parto_instrumental">
+          <legend>C · Asistencia realizada (instrumental / cesárea)</legend>
+
+          <label for="tipo_instrumental">Tipo</label>
+          <select id="tipo_instrumental" name="tipo_instrumental">
+            <option value="">—</option>
+            <option value="Fórceps">Fórceps</option>
+            <option value="Espátulas">Espátulas</option>
+            <option value="Ventosa">Ventosa</option>
+            <option value="Cesárea urgente">Cesárea urgente</option>
+            <option value="Cesárea electiva">Cesárea electiva</option>
+          </select>
+
+          <label for="indicacion">Indicación</label>
+          <input type="text" id="indicacion" name="indicacion" placeholder="ej. no progresión, riesgo pérdida bienestar fetal...">
+
+          <label for="rol_residente">Rol del residente</label>
+          <select id="rol_residente" name="rol_residente">
+            <option value="">—</option>
+            <option value="Instrumentista">Instrumentista</option>
+            <option value="Ayudante">Ayudante</option>
+            <option value="Observador">Observador</option>
+          </select>
+
+          <label for="tipo_anestesia">Tipo de anestesia (si cesárea)</label>
+          <select id="tipo_anestesia" name="tipo_anestesia">
+            <option value="">—</option>
+            <option value="Epidural">Epidural</option>
+            <option value="Raquídea">Raquídea</option>
+            <option value="General">General</option>
+            <option value="No procede">No procede</option>
+          </select>
+        </fieldset>
+
+        <!-- BLOQUE B - CONTROL PRENATAL -->
+        <fieldset class="block" data-types="control_prenatal,gestante_alto_riesgo">
+          <legend>B · Datos del control prenatal</legend>
+
+          <label for="semanas_prenatal">Semanas de gestación</label>
+          <input type="number" id="semanas_prenatal" name="semanas_gestacion_prenatal" min="0" max="45" placeholder="ej. 32">
+
+          <label for="tipo_control">Tipo de control</label>
+          <select id="tipo_control" name="tipo_control">
+            <option value="">—</option>
+            <option value="Primera visita">Primera visita</option>
+            <option value="Visita de seguimiento">Visita de seguimiento</option>
+            <option value="Ecografía">Ecografía</option>
+            <option value="Monitorización">Monitorización</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </fieldset>
+
+        <!-- Patología (gestante alto riesgo) -->
+        <fieldset class="block" data-types="gestante_alto_riesgo">
+          <legend>Patología de alto riesgo</legend>
+          <label for="patologia_gestante">Patología</label>
+          <input type="text" id="patologia_gestante" name="patologia" placeholder="ej. diabetes gestacional, hipertensión...">
+        </fieldset>
+
+        <!-- BLOQUE B - PUÉRPERA -->
+        <fieldset class="block" data-types="puerpera">
+          <legend>B · Datos de la puérpera</legend>
+
+          <label for="horas_postparto">Horas postparto</label>
+          <input type="number" id="horas_postparto" name="horas_postparto" min="0" placeholder="ej. 24">
+
+          <label for="tipo_lactancia_puerpera">Tipo de lactancia</label>
+          <select id="tipo_lactancia_puerpera" name="tipo_lactancia">
+            <option value="">—</option>
+            <option value="Materna exclusiva">Materna exclusiva</option>
+            <option value="Mixta">Mixta</option>
+            <option value="Artificial">Artificial</option>
+          </select>
+        </fieldset>
+
+        <!-- RECIÉN NACIDO -->
+        <fieldset class="block" data-types="recien_nacido">
+          <legend>Datos del recién nacido</legend>
+
+          <label for="horas_vida_rn">Horas de vida</label>
+          <input type="number" id="horas_vida_rn" name="horas_vida" min="0" placeholder="ej. 6">
+
+          <label for="peso_rn2">Peso (gramos)</label>
+          <input type="number" id="peso_rn2" name="peso_gramos" min="0" placeholder="ej. 3100">
+
+          <label for="tipo_lactancia_rn">Tipo de lactancia</label>
+          <select id="tipo_lactancia_rn" name="tipo_lactancia_rn">
+            <option value="">—</option>
+            <option value="Materna exclusiva">Materna exclusiva</option>
+            <option value="Mixta">Mixta</option>
+            <option value="Artificial">Artificial</option>
+          </select>
+
+          <label for="exploracion_normal">Exploración física normal</label>
+          <select id="exploracion_normal" name="exploracion_normal">
+            <option value="">—</option>
+            <option value="Sí">Sí</option>
+            <option value="No">No</option>
+          </select>
+
+          <label for="observaciones_rn">Observaciones</label>
+          <input type="text" id="observaciones_rn" name="observaciones_rn" placeholder="opcional">
+        </fieldset>
+
+        <!-- EDUCACIÓN MATERNAL -->
+        <fieldset class="block" data-types="educacion_maternal">
+          <legend>Educación maternal</legend>
+
+          <label for="grupo_em">Grupo</label>
+          <input type="text" id="grupo_em" name="grupo" placeholder="ej. Grupo A - tarde">
+
+          <label for="num_participantes">Nº de participantes</label>
+          <input type="number" id="num_participantes" name="num_participantes" min="0" placeholder="ej. 8">
+
+          <label for="tema_em">Tema de la sesión</label>
+          <input type="text" id="tema_em" name="tema" placeholder="ej. lactancia materna, plan de parto...">
+        </fieldset>
+
+        <!-- ACTIVIDAD CUALITATIVA -->
+        <fieldset class="block" data-types="actividad_cualitativa">
+          <legend>Actividad cualitativa (áreas 4/5/6)</legend>
+
+          <label for="area_cualitativa">Área</label>
+          <select id="area_cualitativa" name="area_cualitativa">
+            <option value="">—</option>
+            <option value="Ginecología">Ginecología (Área 4)</option>
+            <option value="Atención Primaria">Atención Primaria (Área 5)</option>
+            <option value="Docencia">Docencia (Área 6)</option>
+            <option value="Otro">Otro</option>
+          </select>
+
+          <label for="descripcion_actividad">Descripción</label>
+          <input type="text" id="descripcion_actividad" name="descripcion_actividad" placeholder="describe brevemente la actividad">
+        </fieldset>
+
+        <!-- BLOQUE D: Nivel de autonomía -->
+        <fieldset class="block" data-common="true">
+          <legend>D · Nivel de autonomía</legend>
+          <label for="nivel_autonomia">Nivel</label>
+          <select id="nivel_autonomia" name="nivel_autonomia">
+            <option value="">—</option>
+            <option value="1">Nivel 1 — Realizado de forma independiente</option>
+            <option value="2">Nivel 2 — Realizado bajo supervisión directa</option>
+            <option value="3">Nivel 3 — Observado / asistido al especialista</option>
+          </select>
+        </fieldset>
+
+        <!-- BLOQUE E: Supervisor -->
+        <fieldset class="block" data-common="true">
+          <legend>E · Supervisor</legend>
+          <label for="supervisor_nombre">Nombre del supervisor</label>
+          <input type="text" id="supervisor_nombre" name="supervisor_nombre" placeholder="ej. María García">
+
+          <label for="supervisor_categoria">Categoría</label>
+          <select id="supervisor_categoria" name="supervisor_categoria">
+            <option value="">—</option>
+            <option value="Matrona">Matrona</option>
+            <option value="Tutor principal">Tutor principal</option>
+            <option value="Adjunto">Adjunto</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </fieldset>
+
+        <!-- BLOQUE F: Reflexión libre -->
+        <fieldset class="block" data-common="true">
+          <legend>F · Reflexión libre</legend>
+          <label for="reflexion">Incidencia, aprendizaje clave, duda para tutor</label>
+          <textarea id="reflexion" name="reflexion" rows="4" placeholder="escribe aquí tu reflexión..."></textarea>
+
+          <label class="checkbox-label">
+            <input type="checkbox" id="caso_portfolio" name="caso_portfolio">
+            Marcar como caso para portfolio
+          </label>
+        </fieldset>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary btn-big">Guardar registro</button>
+          <button type="button" id="btn-cancelar" class="btn btn-secondary btn-big">Cancelar</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- PANTALLA 2: DASHBOARD BOE -->
+    <section id="screen-dashboard" class="screen hidden">
+      <h2>Progreso BOE</h2>
+      <div class="filter-row">
+        <select id="dashboard-filtro-anio">
+          <option value="total">Total</option>
+          <option value="1">Año 1</option>
+          <option value="2">Año 2</option>
+        </select>
+      </div>
+      <div id="dashboard-lista" class="progress-list"></div>
+    </section>
+
+    <!-- PANTALLA 3: LOGBOOK -->
+    <section id="screen-logbook" class="screen hidden">
+      <h2>Logbook</h2>
+      <div class="filter-row">
+        <div class="filters-grid">
+          <select id="filtro-tipo">
+            <option value="">Todos los tipos</option>
+          </select>
+          <select id="filtro-rotacion">
+            <option value="">Todas las rotaciones</option>
+          </select>
+          <select id="filtro-mes">
+            <option value="">Todos los meses</option>
+          </select>
+          <select id="filtro-nivel">
+            <option value="">Todos los niveles</option>
+            <option value="1">Nivel 1</option>
+            <option value="2">Nivel 2</option>
+            <option value="3">Nivel 3</option>
+          </select>
+        </div>
+        <label class="checkbox-label">
+          <input type="checkbox" id="filtro-portfolio">
+          ★ Mostrar solo casos marcados para portfolio
+        </label>
+        <button id="btn-limpiar-filtros" class="btn-clear-filters">Limpiar filtros</button>
+      </div>
+      <div id="logbook-lista" class="record-list"></div>
+    </section>
+
+    <!-- PANTALLA 4: EXPORTAR -->
+    <section id="screen-exportar" class="screen hidden">
+      <h2>Exportar</h2>
+      <p class="hint">Todos los datos están solo en este dispositivo. Exporta copias de seguridad o documentos para tus reuniones con la tutora.</p>
+      <button id="btn-export-csv" class="btn btn-secondary btn-big">⬇ Exportar CSV (Excel / Sheets)</button>
+      <button id="btn-export-pdf-resumen" class="btn btn-secondary btn-big">⬇ Exportar PDF resumen BOE</button>
+      <button id="btn-export-pdf-completo" class="btn btn-secondary btn-big">⬇ Exportar PDF logbook completo</button>
+    </section>
+
+  </main>
+
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-screen="registro">Registro</button>
+    <button class="nav-btn" data-screen="dashboard">Dashboard</button>
+    <button class="nav-btn" data-screen="logbook">Logbook</button>
+    <button class="nav-btn" data-screen="exportar">Exportar</button>
+  </nav>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js').catch(() => {
+          // si falla el registro (ej. abierto como archivo local), la app sigue funcionando online
+        });
+      });
+    }
+  </script>
+</body>
+</html>

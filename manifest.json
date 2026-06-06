@@ -1,0 +1,20 @@
+{
+  "name": "Logbook EIR Matrona",
+  "short_name": "Logbook EIR",
+  "description": "Registro de procedimientos clínicos para la residencia EIR de Enfermería Obstétrico-Ginecológica (Matrona) - HUTVC",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2ebe0",
+  "theme_color": "#b3633f",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
