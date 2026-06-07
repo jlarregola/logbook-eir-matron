@@ -6,6 +6,7 @@ const STORAGE_KEY = 'eir_logbook_records';
 const RESIDENCY_START_KEY = 'eir_residency_start';
 
 const BOE_MINIMUMS = {
+  entrevistas_historia_og: 100,
   historias_clinicas: 100,
   controles_prenatales: 100,
   gestantes_alto_riesgo: 40,
@@ -20,6 +21,7 @@ const BOE_MINIMUMS = {
 
 // Cómo se cuenta cada ítem del BOE a partir del tipo de registro guardado
 const BOE_ITEMS = [
+  { key: 'entrevistas_historia_og', label: 'Entrevistas y confección de historia O-G', match: r => r.tipo === 'historia_og' },
   { key: 'historias_clinicas', label: 'Historias clínicas reproductivas', match: r => r.tipo === 'historia_clinica' },
   { key: 'controles_prenatales', label: 'Reconocimientos prenatales', match: r => r.tipo === 'control_prenatal' || r.tipo === 'gestante_alto_riesgo' },
   { key: 'gestantes_alto_riesgo', label: 'Gestantes de alto riesgo vigiladas', match: r => r.tipo === 'gestante_alto_riesgo' },
@@ -42,6 +44,7 @@ const TYPE_LABELS = {
   recien_nacido: 'Recién nacido',
   educacion_maternal: 'Educación maternal',
   historia_clinica: 'Historia clínica reproductiva',
+  historia_og: 'Entrevista historia O-G',
   actividad_cualitativa: 'Actividad cualitativa'
 };
 
@@ -172,8 +175,25 @@ function closeForm() {
 btnNuevoRegistro.addEventListener('click', openManualForm);
 btnCancelar.addEventListener('click', closeForm);
 
+// Mostrar/ocultar campo de texto "Otro centro" en historia O-G
+const centroHogSelect = document.getElementById('centro_hog');
+const centroHogOtro = document.getElementById('centro_hog_otro');
+centroHogSelect.addEventListener('change', () => {
+  const esOtro = centroHogSelect.value === 'Otro';
+  centroHogOtro.classList.toggle('hidden', !esOtro);
+  if (!esOtro) centroHogOtro.value = '';
+});
+
 tipoSelect.addEventListener('change', () => {
-  updateFieldVisibility(tipoSelect.value);
+  const tipo = tipoSelect.value;
+  updateFieldVisibility(tipo);
+  // Auto-sugerir número de orden para historia O-G
+  if (tipo === 'historia_og' && !editingRecordId) {
+    const numField = document.getElementById('num_secuencial_hog');
+    if (numField && !numField.value) {
+      numField.value = getRecords().filter(r => r.tipo === 'historia_og').length + 1;
+    }
+  }
 });
 
 function setDefaultDateTime() {
@@ -658,10 +678,17 @@ function renderLogbook() {
     card.className = 'record-card';
     const fecha = record.fecha_hora ? new Date(record.fecha_hora).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : '—';
     const badge = record.caso_portfolio ? '<span class="badge-portfolio">Portfolio</span>' : '';
+    let meta2;
+    if (record.tipo === 'historia_og') {
+      const centro = record.centro_hog === 'Otro' ? (record.centro_hog_otro || 'Otro') : (record.centro_hog || '—');
+      meta2 = `Nº ${record.num_secuencial_hog || '—'} · ${centro} · Matrona: ${record.matrona_responsable || '—'}`;
+    } else {
+      meta2 = `Hª ${record.num_historia || '—'} · ${record.supervisor_nombre || 'Sin supervisor'}`;
+    }
     card.innerHTML = `
       <div class="record-title">${TYPE_LABELS[record.tipo] || record.tipo}${badge}</div>
       <div class="record-meta">${fecha} · ${record.rotacion || 'Sin rotación'} · Nivel ${record.nivel_autonomia || '—'}</div>
-      <div class="record-meta">Hª ${record.num_historia || '—'} · ${record.supervisor_nombre || 'Sin supervisor'}</div>
+      <div class="record-meta">${meta2}</div>
       <div class="record-actions">
         <button class="btn-edit" data-id="${record.id}">Editar</button>
         <button class="btn-delete" data-id="${record.id}">Eliminar</button>
@@ -695,6 +722,11 @@ function editRecord(id) {
     if (field.type === 'checkbox') field.checked = !!record[key];
     else field.value = record[key];
   });
+
+  // Restaurar visibilidad del campo "Otro centro" si aplica
+  if (record.tipo === 'historia_og') {
+    centroHogOtro.classList.toggle('hidden', centroHogSelect.value !== 'Otro');
+  }
 
   formInicio.classList.add('hidden');
   form.classList.remove('hidden');
@@ -757,6 +789,10 @@ const CSV_COLUMNS = [
   ['grupo', 'Grupo (educación maternal)'],
   ['num_participantes', 'Nº participantes'],
   ['tema', 'Tema (educación maternal)'],
+  ['num_secuencial_hog', 'Nº de orden (historia O-G)'],
+  ['centro_hog', 'Centro (historia O-G)'],
+  ['centro_hog_otro', 'Centro personalizado (historia O-G)'],
+  ['matrona_responsable', 'Matrona responsable'],
   ['area_cualitativa', 'Área (cualitativa)'],
   ['descripcion_actividad', 'Descripción actividad'],
   ['nivel_autonomia', 'Nivel de autonomía'],

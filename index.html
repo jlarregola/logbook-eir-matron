@@ -48,6 +48,7 @@
             <option value="recien_nacido">Recién nacido</option>
             <option value="educacion_maternal">Educación maternal</option>
             <option value="historia_clinica">Historia clínica reproductiva</option>
+            <option value="historia_og">Entrevista y historia obstétrico-ginecológica</option>
             <option value="actividad_cualitativa">Actividad cualitativa (áreas 4/5/6)</option>
           </select>
         </fieldset>
@@ -305,6 +306,33 @@
 
           <label for="tema_em">Tema de la sesión</label>
           <input type="text" id="tema_em" name="tema" placeholder="ej. lactancia materna, plan de parto...">
+        </fieldset>
+
+        <!-- HISTORIA OBSTÉTRICO-GINECOLÓGICA -->
+        <fieldset class="block" data-types="historia_og">
+          <legend>Historia obstétrico-ginecológica</legend>
+
+          <label for="num_secuencial_hog">Nº de orden (de 100)</label>
+          <input type="number" id="num_secuencial_hog" name="num_secuencial_hog" min="1" max="100" inputmode="numeric" placeholder="ej. 1">
+
+          <label for="centro_hog">Centro</label>
+          <select id="centro_hog" name="centro_hog">
+            <option value="">— Selecciona un centro —</option>
+            <option value="CAP La Senia">CAP La Senia</option>
+            <option value="CAP Temple">CAP Temple</option>
+            <option value="CAP Baix Ebre">CAP Baix Ebre</option>
+            <option value="CAP Ulldecona">CAP Ulldecona</option>
+            <option value="CAP Aldea">CAP Aldea</option>
+            <option value="CAP Deltebre">CAP Deltebre</option>
+            <option value="CAP Roquetes">CAP Roquetes</option>
+            <option value="CAP Amposta">CAP Amposta</option>
+            <option value="CAP L'Almetlla">CAP L'Almetlla</option>
+            <option value="Otro">Otro...</option>
+          </select>
+          <input type="text" id="centro_hog_otro" name="centro_hog_otro" placeholder="Escribe el nombre del centro" class="hidden" style="margin-top:8px;">
+
+          <label for="matrona_responsable">Matrona responsable</label>
+          <input type="text" id="matrona_responsable" name="matrona_responsable" placeholder="ej. María García">
         </fieldset>
 
         <!-- ACTIVIDAD CUALITATIVA -->
