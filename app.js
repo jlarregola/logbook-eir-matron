@@ -281,6 +281,75 @@ const btnGuardarOtro = document.getElementById('btn-guardar-otro');
 const actividadSelect = document.getElementById('actividad');
 const formFields = document.getElementById('form-fields');
 const editBanner = document.getElementById('edit-banner');
+const activityPicker = document.getElementById('activity-picker');
+
+// Color de categoría de una actividad (para acentos en otras pantallas)
+function groupColorOf(key) {
+  const a = getActivity(key);
+  const c = a && GROUP_COLORS[a.grupo];
+  return c ? c.head : 'var(--color-border)';
+}
+
+// Construye el selector visual por categorías (acordeón coloreado)
+function buildActivityPicker() {
+  if (!activityPicker || activityPicker.childElementCount) return;
+  const grupos = {};
+  ACTIVITIES.forEach(a => { (grupos[a.grupo] = grupos[a.grupo] || []).push(a); });
+
+  Object.keys(grupos).forEach(grupoName => {
+    const colors = GROUP_COLORS[grupoName] || { head: '#cccccc', opt: '#eeeeee' };
+
+    const group = document.createElement('div');
+    group.className = 'cat-group';
+
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.className = 'cat-header';
+    header.style.background = colors.head;
+    header.innerHTML = `<span>${grupoName}</span><span class="cat-chevron">▾</span>`;
+    header.addEventListener('click', () => {
+      const isOpen = group.classList.contains('open');
+      activityPicker.querySelectorAll('.cat-group.open').forEach(g => g.classList.remove('open'));
+      if (!isOpen) group.classList.add('open');
+    });
+
+    const items = document.createElement('div');
+    items.className = 'cat-items';
+    grupos[grupoName].forEach(a => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'cat-item';
+      item.dataset.key = a.key;
+      item.style.borderLeftColor = colors.head;
+      item.style.background = colors.opt;
+      item.textContent = a.label;
+      item.addEventListener('click', () => selectActivity(a.key));
+      items.appendChild(item);
+    });
+
+    group.appendChild(header);
+    group.appendChild(items);
+    activityPicker.appendChild(group);
+  });
+}
+
+// Resalta la actividad elegida en el picker y abre su categoría (sin reconstruir el formulario)
+function syncPickerSelection(key) {
+  if (!activityPicker) return;
+  activityPicker.querySelectorAll('.cat-item').forEach(el => {
+    el.classList.toggle('selected', el.dataset.key === key);
+  });
+  activityPicker.querySelectorAll('.cat-group').forEach(g => {
+    g.classList.toggle('open', key && !!g.querySelector(`.cat-item[data-key="${key}"]`));
+  });
+}
+
+// Elige una actividad desde el picker: fija el valor y genera los campos
+function selectActivity(key) {
+  actividadSelect.value = key;
+  syncPickerSelection(key);
+  buildFormForActivity(key);
+}
 
 let editingRecordId = null;
 
@@ -361,6 +430,7 @@ function formHasInput() {
 
 function setEditingUI(isEditing) {
   actividadSelect.disabled = isEditing;
+  if (activityPicker) activityPicker.classList.toggle('disabled', isEditing);
   if (editBanner) editBanner.classList.toggle('hidden', !isEditing);
   if (btnGuardar) btnGuardar.textContent = isEditing ? 'Guardar cambios' : 'Guardar registro';
   if (btnGuardarOtro) btnGuardarOtro.classList.toggle('hidden', isEditing);
@@ -371,6 +441,7 @@ function openManualForm() {
   form.reset();
   actividadSelect.value = '';
   formFields.innerHTML = '';
+  syncPickerSelection('');
   setEditingUI(false);
   formInicio.classList.add('hidden');
   form.classList.remove('hidden');
@@ -381,6 +452,7 @@ function closeForm(skipConfirm) {
   editingRecordId = null;
   form.reset();
   formFields.innerHTML = '';
+  syncPickerSelection('');
   setEditingUI(false);
   form.classList.add('hidden');
   formInicio.classList.remove('hidden');
@@ -462,6 +534,7 @@ function submitForm(keepOpen) {
     const sameActivity = act.key;
     editingRecordId = null;
     buildFormForActivity(sameActivity); // limpia los campos y vuelve a poner la fecha de hoy
+    syncPickerSelection(sameActivity);
     setEditingUI(false);
     showToast('Guardado ✓ Añade el siguiente');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -560,6 +633,7 @@ function renderDashboard() {
 
     const el = document.createElement('div');
     el.className = 'progress-item';
+    el.style.borderLeft = '5px solid ' + groupColorOf(act.key);
     el.innerHTML = `
       <div class="label-row">
         <span class="name">${act.label}</span>
@@ -663,6 +737,7 @@ function renderLogbook() {
   records.forEach(record => {
     const card = document.createElement('div');
     card.className = 'record-card';
+    card.style.borderLeft = '5px solid ' + groupColorOf(record.actividad);
     const num = seqMap[record.id] || '?';
     const fecha = formatDate(primaryDate(record));
     const detalle = recordDetailParts(record).join(' · ') || '—';
@@ -717,6 +792,7 @@ function editRecord(id) {
     }
   });
 
+  syncPickerSelection(record.actividad);
   setEditingUI(true);
   formInicio.classList.add('hidden');
   form.classList.remove('hidden');
@@ -1092,6 +1168,7 @@ if (btnImportBackup && importFileInput) {
 // ---------------------------------------------------------------------------
 
 populateActivitySelect();
+buildActivityPicker();
 populateExportSelect();
 renderDashboard();
 renderLogbook();

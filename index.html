@@ -32,10 +32,12 @@
         <div id="edit-banner" class="review-banner hidden">✏️ Estás editando un registro existente.</div>
         <fieldset class="block">
           <legend>Actividad</legend>
-          <label for="actividad">¿Qué actividad vas a registrar?</label>
-          <select id="actividad" name="actividad" required>
+          <label for="actividad" class="visually-hidden">¿Qué actividad vas a registrar?</label>
+          <select id="actividad" name="actividad" class="visually-hidden" tabindex="-1" aria-hidden="true">
             <option value="">— Selecciona una actividad —</option>
           </select>
+          <p class="hint" style="margin-top:0;">Toca una categoría y elige la actividad que vas a registrar.</p>
+          <div id="activity-picker" class="activity-picker"></div>
         </fieldset>
 
         <!-- Los campos se generan automáticamente según la actividad elegida -->

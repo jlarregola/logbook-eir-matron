@@ -1,6 +1,6 @@
 // Service Worker — funcionamiento 100% offline (esencial: en el paritorio puede no haber wifi)
 
-const CACHE_NAME = 'logbook-eir-matron-v7';
+const CACHE_NAME = 'logbook-eir-matron-v8';
 
 const APP_SHELL = [
   './',
