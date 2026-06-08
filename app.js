@@ -239,7 +239,8 @@ const screens = {
   registro: document.getElementById('screen-registro'),
   dashboard: document.getElementById('screen-dashboard'),
   logbook: document.getElementById('screen-logbook'),
-  exportar: document.getElementById('screen-exportar')
+  exportar: document.getElementById('screen-exportar'),
+  cuenta: document.getElementById('screen-cuenta')
 };
 
 const navButtons = document.querySelectorAll('.nav-btn');
@@ -513,6 +514,8 @@ function submitForm(keepOpen) {
     record[f.name] = value != null ? String(value).trim() : '';
   });
 
+  record.updated_at = new Date().toISOString(); // sello de tiempo para la sincronización
+
   const records = getRecords();
   if (editingRecordId) {
     const idx = records.findIndex(r => r.id === editingRecordId);
@@ -525,6 +528,8 @@ function submitForm(keepOpen) {
     showToast('No se pudo guardar: el almacenamiento del teléfono está lleno. Guarda una copia de seguridad y libera espacio.', 'warning');
     return; // no cerramos el formulario: los datos siguen en pantalla
   }
+
+  if (window.cloudUpsert) window.cloudUpsert(record); // sube la copia a la nube si hay sesión
 
   const wasEditing = !!editingRecordId;
   renderDashboard();
@@ -618,6 +623,7 @@ function renderDashboard() {
   dashboardLista.appendChild(configCard);
   configCard.querySelector('#residency-start-input').addEventListener('change', e => {
     setResidencyStart(e.target.value);
+    if (window.cloudPushAjustes) window.cloudPushAjustes();
     showToast('Fecha de inicio guardada ✓');
     renderDashboard();
   });
@@ -812,6 +818,7 @@ function deleteRecord(id) {
     showToast('No se pudo eliminar (error de almacenamiento).', 'warning');
     return;
   }
+  if (window.cloudDelete) window.cloudDelete(removed.id); // propaga el borrado a la nube
   renderLogbook();
   renderDashboard();
 
@@ -819,8 +826,10 @@ function deleteRecord(id) {
     label: 'Deshacer',
     fn: () => {
       const recs = getRecords();
+      removed.updated_at = new Date().toISOString(); // gana sobre el borrado en la nube
       if (!recs.some(r => r.id === removed.id)) recs.push(removed);
       if (saveRecords(recs)) {
+        if (window.cloudUpsert) window.cloudUpsert(removed);
         renderLogbook();
         renderDashboard();
         showToast('Registro restaurado ✓');
@@ -1135,6 +1144,7 @@ function importBackup(file) {
     if (data && data.residency_start && !getResidencyStart()) {
       setResidencyStart(data.residency_start);
     }
+    if (window.cloudAfterImport) window.cloudAfterImport(); // sube lo importado a la nube
     renderDashboard();
     renderLogbook();
     showToast(`Copia restaurada ✓ (${valid.length} registros)`);

@@ -105,6 +105,38 @@
       <input type="file" id="import-file" accept="application/json,.json" class="hidden">
     </section>
 
+    <!-- PANTALLA 5: NUBE / CUENTA -->
+    <section id="screen-cuenta" class="screen hidden">
+      <h2>Copia en la nube</h2>
+
+      <div id="cuenta-logged-out">
+        <p class="hint">Inicia sesión para guardar automáticamente una copia de tus registros en la nube. Si pierdes el móvil, entra con tu correo y contraseña desde cualquier dispositivo y recuperarás todo.</p>
+        <form id="cuenta-form">
+          <fieldset class="block">
+            <legend>Tu cuenta</legend>
+            <label for="cuenta-input-email">Correo electrónico</label>
+            <input type="email" id="cuenta-input-email" autocomplete="username" placeholder="tucorreo@ejemplo.com">
+            <label for="cuenta-input-password">Contraseña</label>
+            <input type="password" id="cuenta-input-password" autocomplete="current-password" placeholder="mínimo 6 caracteres">
+          </fieldset>
+          <button type="submit" id="btn-login" class="btn btn-primary btn-big">Iniciar sesión</button>
+          <button type="button" id="btn-register" class="btn btn-accent btn-big">Crear cuenta nueva</button>
+        </form>
+        <p class="hint">¿Primera vez? Pulsa <strong>"Crear cuenta nueva"</strong>. Después, en este u otro dispositivo, usa <strong>"Iniciar sesión"</strong> con el mismo correo y contraseña.</p>
+      </div>
+
+      <div id="cuenta-logged-in" class="hidden">
+        <fieldset class="block">
+          <legend>Sesión iniciada</legend>
+          <p class="hint" style="margin-top:0;">Conectado como <strong id="cuenta-email"></strong></p>
+          <p id="cuenta-estado" class="sync-status"></p>
+          <button type="button" id="btn-sync-now" class="btn btn-secondary btn-big">🔄 Sincronizar ahora</button>
+          <button type="button" id="btn-logout" class="btn btn-secondary btn-big">Cerrar sesión</button>
+        </fieldset>
+        <p class="hint">Tus datos se sincronizan solos cuando hay internet. Puedes usar la app sin conexión: los cambios se subirán al reconectar.</p>
+      </div>
+    </section>
+
   </main>
 
   <nav class="bottom-nav">
@@ -112,10 +144,13 @@
     <button class="nav-btn" data-screen="dashboard">Progreso</button>
     <button class="nav-btn" data-screen="logbook">Logbook</button>
     <button class="nav-btn" data-screen="exportar">Exportar</button>
+    <button class="nav-btn" data-screen="cuenta">☁ Nube<span id="sync-indicator" class="sync-dot hidden"></span></button>
   </nav>
 
   <script src="jspdf.umd.min.js"></script>
+  <script src="supabase.js"></script>
   <script src="app.js"></script>
+  <script src="sync.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

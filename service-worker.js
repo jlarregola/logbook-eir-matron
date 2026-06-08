@@ -1,15 +1,17 @@
 // Service Worker — funcionamiento 100% offline (esencial: en el paritorio puede no haber wifi)
 
-const CACHE_NAME = 'logbook-eir-matron-v8';
+const CACHE_NAME = 'logbook-eir-matron-v9';
 
 const APP_SHELL = [
   './',
   './index.html',
   './style.css',
   './app.js',
+  './sync.js',
   './manifest.json',
   './icon.svg',
-  './jspdf.umd.min.js'
+  './jspdf.umd.min.js',
+  './supabase.js'
 ];
 
 self.addEventListener('install', event => {
@@ -34,6 +36,11 @@ self.addEventListener('activate', event => {
 // Así las mejoras llegan al teléfono sin quedarse atascado en una versión antigua.
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+
+  // Solo gestionamos archivos propios de la app. Las llamadas a la nube
+  // (Supabase) y cualquier otro origen externo van directas a la red sin cachear.
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
 
   event.respondWith(
     caches.match(event.request).then(cached => {

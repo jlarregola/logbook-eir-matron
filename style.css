@@ -298,11 +298,31 @@ body {
   flex: 1;
   border: none;
   background: none;
-  padding: 12px 4px;
+  padding: 12px 2px;
   min-height: 56px;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   color: var(--color-text-muted);
   cursor: pointer;
+  position: relative;
+}
+
+/* Puntito que indica que la sincronización en la nube está activa */
+.sync-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  margin-left: 3px;
+  vertical-align: middle;
+}
+
+.sync-status {
+  font-size: 0.85rem;
+  color: var(--color-accent);
+  font-weight: 600;
+  min-height: 1.2em;
+  margin: 4px 0 12px;
 }
 
 .nav-btn.active {
