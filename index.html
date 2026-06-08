@@ -80,10 +80,18 @@
     <!-- PANTALLA 4: EXPORTAR -->
     <section id="screen-exportar" class="screen hidden">
       <h2>Exportar</h2>
-      <p class="hint">Todos los datos están solo en este dispositivo. Exporta copias de seguridad o documentos para tus reuniones con la tutora.</p>
-      <button id="btn-export-csv" class="btn btn-secondary btn-big">⬇ Exportar CSV (Excel / Sheets)</button>
-      <button id="btn-export-pdf-resumen" class="btn btn-secondary btn-big">⬇ Exportar PDF resumen de progreso</button>
-      <button id="btn-export-pdf-completo" class="btn btn-secondary btn-big">⬇ Exportar PDF logbook completo</button>
+      <p class="hint">Elige qué quieres exportar y descárgalo en el formato que necesites. Todos los datos están solo en este dispositivo.</p>
+
+      <div class="filter-row">
+        <label for="export-actividad" class="export-label">¿Qué quieres exportar?</label>
+        <select id="export-actividad">
+          <option value="">Todas las actividades</option>
+        </select>
+      </div>
+
+      <button id="btn-export-txt" class="btn btn-secondary btn-big">📄 Hoja de texto (.txt)</button>
+      <button id="btn-export-csv" class="btn btn-secondary btn-big">📊 Hoja de cálculo (.csv · Excel / Sheets)</button>
+      <button id="btn-export-pdf" class="btn btn-secondary btn-big">📕 PDF</button>
     </section>
 
   </main>

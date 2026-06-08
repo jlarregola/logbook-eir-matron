@@ -71,6 +71,43 @@ const ACTIVITIES = [
   { key: 'grupos_menopausia',          grupo: 'Actividades grupales',               label: 'Participación en Grupos de Menopausia/Climaterio',              min: 2,    fields: ['fecha', 'num_participantes', 'centro_realiza', 'responsable'] }
 ];
 
+// Color de fondo por categoría, para localizar la actividad de un vistazo
+const GROUP_COLORS = {
+  'Partos y cesáreas':                  { head: '#e3a78f', opt: '#f6e4db' },
+  'Embarazo, puerperio y domicilio':    { head: '#a9b98a', opt: '#e6ecd9' },
+  'Recién nacido':                      { head: '#e6c87e', opt: '#f7eccf' },
+  'Consulta, asesoramiento y muestras': { head: '#b3a7cc', opt: '#e7e1f0' },
+  'Actividades grupales':               { head: '#d8b48a', opt: '#f0e4d2' }
+};
+
+// Rellena un <select> con las actividades agrupadas por categoría y coloreadas
+function buildActivityOptgroups(selectEl) {
+  const grupos = {};
+  ACTIVITIES.forEach(a => { (grupos[a.grupo] = grupos[a.grupo] || []).push(a); });
+  Object.keys(grupos).forEach(grupoName => {
+    const og = document.createElement('optgroup');
+    og.label = grupoName;
+    const colors = GROUP_COLORS[grupoName];
+    if (colors) {
+      og.style.background = colors.head;
+      og.style.color = '#463a30';
+      og.style.fontWeight = '700';
+    }
+    grupos[grupoName].forEach(a => {
+      const opt = document.createElement('option');
+      opt.value = a.key;
+      opt.textContent = a.label;
+      if (colors) {
+        opt.style.background = colors.opt;
+        opt.style.color = '#463a30';
+        opt.style.fontWeight = '400';
+      }
+      og.appendChild(opt);
+    });
+    selectEl.appendChild(og);
+  });
+}
+
 function getActivity(key) {
   return ACTIVITIES.find(a => a.key === key) || null;
 }
@@ -182,6 +219,7 @@ navButtons.forEach(btn => {
     });
     if (target === 'dashboard') renderDashboard();
     if (target === 'logbook') renderLogbook();
+    if (target === 'exportar') populateExportSelect();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 });
@@ -202,21 +240,7 @@ let editingRecordId = null;
 // Rellena el desplegable de actividades, agrupadas por categoría
 function populateActivitySelect() {
   if (actividadSelect.querySelectorAll('optgroup').length > 0) return;
-  const grupos = {};
-  ACTIVITIES.forEach(a => {
-    (grupos[a.grupo] = grupos[a.grupo] || []).push(a);
-  });
-  Object.keys(grupos).forEach(grupoName => {
-    const og = document.createElement('optgroup');
-    og.label = grupoName;
-    grupos[grupoName].forEach(a => {
-      const opt = document.createElement('option');
-      opt.value = a.key;
-      opt.textContent = a.label;
-      og.appendChild(opt);
-    });
-    actividadSelect.appendChild(og);
-  });
+  buildActivityOptgroups(actividadSelect);
 }
 
 function todayISO() {
@@ -463,19 +487,7 @@ function formatMonthLabel(yearMonth) {
 
 function populateLogbookFilters() {
   if (filtroActividad.options.length === 1) {
-    const grupos = {};
-    ACTIVITIES.forEach(a => { (grupos[a.grupo] = grupos[a.grupo] || []).push(a); });
-    Object.keys(grupos).forEach(grupoName => {
-      const og = document.createElement('optgroup');
-      og.label = grupoName;
-      grupos[grupoName].forEach(a => {
-        const opt = document.createElement('option');
-        opt.value = a.key;
-        opt.textContent = a.label;
-        og.appendChild(opt);
-      });
-      filtroActividad.appendChild(og);
-    });
+    buildActivityOptgroups(filtroActividad);
   }
 
   const months = new Set();
@@ -613,19 +625,30 @@ function deleteRecord(id) {
 // Exportación: CSV (JS puro con Blob) y PDF (jsPDF vía CDN)
 // ---------------------------------------------------------------------------
 
-// Columnas unificadas que cubren todas las actividades
-const CSV_COLUMNS = [
-  ['actividad', 'Actividad'],
-  ['num', 'Nº'],
-  ['fecha', 'Fecha'],
-  ['fecha_fin', 'Fecha finalización'],
-  ['nhc', 'NHC'],
-  ['centro', 'Centro'],
-  ['tipo_muestra', 'Tipo muestra'],
-  ['num_sesiones', 'Nº Sesiones'],
-  ['num_participantes', 'Nº participantes'],
-  ['responsable', 'Responsable']
-];
+const exportActividadSelect = document.getElementById('export-actividad');
+
+function populateExportSelect() {
+  if (exportActividadSelect.querySelectorAll('optgroup').length > 0) return;
+  buildActivityOptgroups(exportActividadSelect);
+}
+
+// Columnas de una actividad para texto/CSV: Nº + los campos de su hoja
+function activityColumns(act) {
+  const cols = [{ header: 'Nº', kind: 'num' }];
+  act.fields.forEach(token => {
+    const f = FIELD_DEFS[token];
+    cols.push({ header: f.label, name: f.name, type: f.type });
+  });
+  return cols;
+}
+
+function cellValue(col, record, num) {
+  if (col.kind === 'num') return String(num);
+  const v = record[col.name];
+  if (v == null || v === '') return '';
+  if (col.type === 'date') return formatDate(v);
+  return String(v);
+}
 
 function csvEscape(value) {
   if (value === undefined || value === null) return '';
@@ -640,6 +663,16 @@ function todayStamp() {
   return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
 }
 
+// Convierte un texto a un nombre de archivo seguro
+function slug(text) {
+  return text
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 60);
+}
+
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -651,106 +684,145 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-function exportCSV() {
+// Devuelve las actividades a exportar según el selector (vacío = todas con registros)
+function activitiesToExport(filterKey) {
+  if (filterKey) return [getActivity(filterKey)].filter(Boolean);
   const records = getRecords();
-  if (records.length === 0) {
-    showToast('Todavía no hay registros para exportar.', 'warning');
+  return ACTIVITIES.filter(act => records.some(r => r.actividad === act.key));
+}
+
+// ---- Hoja de texto (.txt) ----
+
+function buildTxtForActivity(act, records, seqMap) {
+  const cols = activityColumns(act);
+  const recs = records
+    .filter(r => r.actividad === act.key)
+    .sort((a, b) => (seqMap[a.id] || 0) - (seqMap[b.id] || 0));
+  const rows = recs.map(r => cols.map(c => cellValue(c, r, seqMap[r.id])));
+
+  const widths = cols.map((c, i) => {
+    const cellLens = rows.map(r => r[i].length);
+    return Math.max(c.header.length, 3, ...cellLens);
+  });
+
+  const sep = ' | ';
+  const lines = [];
+  lines.push(act.label);
+  lines.push(act.min != null ? `Actividad mínima: ${act.min}` : 'Sin mínimo establecido');
+  lines.push('');
+  lines.push(cols.map((c, i) => c.header.padEnd(widths[i])).join(sep));
+  lines.push(cols.map((c, i) => '-'.repeat(widths[i])).join('-+-'));
+  rows.forEach(r => lines.push(r.map((cell, i) => cell.padEnd(widths[i])).join(sep)));
+  lines.push('');
+  lines.push(`Total: ${recs.length}${act.min != null ? ' / ' + act.min : ''}`);
+  return lines.join('\n');
+}
+
+function exportTXT(filterKey) {
+  const records = getRecords();
+  const relevant = filterKey ? records.filter(r => r.actividad === filterKey) : records;
+  if (relevant.length === 0) {
+    showToast('No hay registros para exportar en esa selección.', 'warning');
+    return;
+  }
+  const seqMap = sequenceMap();
+  const acts = activitiesToExport(filterKey);
+
+  const blocks = [];
+  blocks.push('LOGBOOK EIR MATRONA · HUTVC');
+  blocks.push(`Generado: ${new Date().toLocaleString('es-ES')}`);
+  blocks.push('='.repeat(64));
+  acts.forEach(act => {
+    blocks.push('');
+    blocks.push(buildTxtForActivity(act, records, seqMap));
+    blocks.push('');
+    blocks.push('='.repeat(64));
+  });
+
+  const blob = new Blob([blocks.join('\n')], { type: 'text/plain;charset=utf-8;' });
+  const name = filterKey ? slug(getActivity(filterKey).label) : 'logbook_completo';
+  downloadBlob(blob, `${name}_${todayStamp()}.txt`);
+}
+
+// ---- Hoja de cálculo (.csv) ----
+
+function exportCSV(filterKey) {
+  const records = getRecords();
+  const relevant = filterKey ? records.filter(r => r.actividad === filterKey) : records;
+  if (relevant.length === 0) {
+    showToast('No hay registros para exportar en esa selección.', 'warning');
     return;
   }
   const seqMap = sequenceMap();
 
-  const header = CSV_COLUMNS.map(c => csvEscape(c[1])).join(',');
-  const rows = records
-    .slice()
-    .sort((a, b) => activityLabel(a.actividad).localeCompare(activityLabel(b.actividad)) || (seqMap[a.id] - seqMap[b.id]))
-    .map(record => CSV_COLUMNS.map(([key]) => {
-      let value;
-      if (key === 'actividad') value = activityLabel(record.actividad);
-      else if (key === 'num') value = seqMap[record.id] || '';
-      else if (key === 'fecha') value = primaryDate(record);
-      else value = record[key];
-      return csvEscape(value);
-    }).join(','));
+  let header, rows, filename;
+
+  if (filterKey) {
+    const act = getActivity(filterKey);
+    const cols = activityColumns(act);
+    const recs = relevant.slice().sort((a, b) => (seqMap[a.id] || 0) - (seqMap[b.id] || 0));
+    header = cols.map(c => csvEscape(c.header)).join(',');
+    rows = recs.map(r => cols.map(c => csvEscape(cellValue(c, r, seqMap[r.id]))).join(','));
+    filename = `${slug(act.label)}_${todayStamp()}.csv`;
+  } else {
+    // Todas las actividades: tabla unificada con una columna "Actividad"
+    const COLS = [
+      ['actividad', 'Actividad'], ['num', 'Nº'], ['fecha', 'Fecha'],
+      ['fecha_fin', 'Fecha finalización'], ['nhc', 'NHC'], ['centro', 'Centro'],
+      ['tipo_muestra', 'Tipo muestra'], ['num_sesiones', 'Nº Sesiones'],
+      ['num_participantes', 'Nº participantes'], ['responsable', 'Responsable']
+    ];
+    header = COLS.map(c => csvEscape(c[1])).join(',');
+    rows = records
+      .slice()
+      .sort((a, b) => activityLabel(a.actividad).localeCompare(activityLabel(b.actividad)) || ((seqMap[a.id] || 0) - (seqMap[b.id] || 0)))
+      .map(record => COLS.map(([key]) => {
+        let value;
+        if (key === 'actividad') value = activityLabel(record.actividad);
+        else if (key === 'num') value = seqMap[record.id] || '';
+        else if (key === 'fecha') value = formatDate(primaryDate(record));
+        else if (key === 'fecha_fin') value = record.fecha_fin ? formatDate(record.fecha_fin) : '';
+        else value = record[key];
+        return csvEscape(value);
+      }).join(','));
+    filename = `logbook_completo_${todayStamp()}.csv`;
+  }
 
   const csvContent = '﻿' + [header, ...rows].join('\n');
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  downloadBlob(blob, `logbook_eir_${todayStamp()}.csv`);
+  downloadBlob(blob, filename);
 }
 
-function exportPDFResumen() {
-  if (!window.jspdf) {
-    showToast('La librería de PDF no está disponible sin conexión. Conéctate a internet la primera vez.', 'warning');
-    return;
-  }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  const records = getRecords();
+// ---- PDF ----
 
-  doc.setFontSize(16);
-  doc.setTextColor(179, 99, 63);
-  doc.text('Resumen de progreso', 14, 18);
-
-  doc.setFontSize(10);
-  doc.setTextColor(70, 58, 48);
-  doc.text('Logbook EIR Matrona · HUTVC', 14, 25);
-  doc.text(`Generado: ${new Date().toLocaleString('es-ES')}  ·  Total de registros: ${records.length}`, 14, 30);
-
-  let y = 44;
-  doc.setFontSize(11);
-  doc.text('Actividad', 14, y);
-  doc.text('Hecho', 150, y);
-  doc.text('Mínimo', 168, y);
-  doc.text('%', 188, y);
-  y += 3;
-  doc.setDrawColor(226, 210, 191);
-  doc.line(14, y, 196, y);
-  y += 7;
-
-  doc.setFontSize(9);
-  ACTIVITIES.forEach(act => {
-    const count = records.filter(r => r.actividad === act.key).length;
-    const hasMin = act.min != null;
-    const percent = hasMin ? Math.min(100, Math.round((count / act.min) * 100)) : null;
-
-    if (y > 275) { doc.addPage(); y = 20; }
-
-    const lines = doc.splitTextToSize(act.label, 130);
-    doc.text(lines, 14, y);
-    doc.text(String(count), 152, y);
-    doc.text(hasMin ? String(act.min) : '—', 168, y);
-    doc.text(hasMin ? `${percent}%${percent >= 100 ? ' ✓' : ''}` : '—', 186, y);
-    y += Math.max(lines.length * 5, 8);
-  });
-
-  doc.save(`resumen_progreso_${todayStamp()}.pdf`);
-}
-
-function exportPDFCompleto() {
+function exportPDF(filterKey) {
   if (!window.jspdf) {
     showToast('La librería de PDF no está disponible sin conexión. Conéctate a internet la primera vez.', 'warning');
     return;
   }
   const records = getRecords();
-  if (records.length === 0) {
-    showToast('Todavía no hay registros para exportar.', 'warning');
+  const relevant = filterKey ? records.filter(r => r.actividad === filterKey) : records;
+  if (relevant.length === 0) {
+    showToast('No hay registros para exportar en esa selección.', 'warning');
     return;
   }
   const seqMap = sequenceMap();
+  const acts = activitiesToExport(filterKey);
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
 
   doc.setFontSize(16);
   doc.setTextColor(179, 99, 63);
-  doc.text('Logbook completo', 14, 18);
+  doc.text(filterKey ? 'Hoja de registro' : 'Logbook completo', 14, 18);
   doc.setFontSize(10);
   doc.setTextColor(70, 58, 48);
-  doc.text(`Generado: ${new Date().toLocaleString('es-ES')}  ·  Total: ${records.length} registros`, 14, 25);
+  doc.text(`Logbook EIR Matrona · HUTVC · Generado: ${new Date().toLocaleString('es-ES')}`, 14, 25);
 
   let y = 38;
 
-  ACTIVITIES.forEach(act => {
-    const group = records
+  acts.forEach(act => {
+    const group = relevant
       .filter(r => r.actividad === act.key)
       .sort((a, b) => (seqMap[a.id] || 0) - (seqMap[b.id] || 0));
     if (group.length === 0) return;
@@ -780,25 +852,26 @@ function exportPDFCompleto() {
     y += 4;
   });
 
-  doc.save(`logbook_completo_${todayStamp()}.pdf`);
+  const name = filterKey ? slug(getActivity(filterKey).label) : 'logbook_completo';
+  doc.save(`${name}_${todayStamp()}.pdf`);
 }
 
+const btnExportTXT = document.getElementById('btn-export-txt');
 const btnExportCSV = document.getElementById('btn-export-csv');
-const btnExportPDFResumen = document.getElementById('btn-export-pdf-resumen');
-const btnExportPDFCompleto = document.getElementById('btn-export-pdf-completo');
+const btnExportPDF = document.getElementById('btn-export-pdf');
+
+btnExportTXT.addEventListener('click', () => {
+  try { exportTXT(exportActividadSelect.value); showToast('Hoja de texto descargada ✓'); }
+  catch (e) { showToast('No se ha podido generar el archivo de texto.', 'warning'); }
+});
 
 btnExportCSV.addEventListener('click', () => {
-  try { exportCSV(); showToast('CSV descargado correctamente ✓'); }
+  try { exportCSV(exportActividadSelect.value); showToast('Hoja de cálculo descargada ✓'); }
   catch (e) { showToast('No se ha podido generar el CSV.', 'warning'); }
 });
 
-btnExportPDFResumen.addEventListener('click', () => {
-  try { exportPDFResumen(); showToast('PDF de resumen descargado correctamente ✓'); }
-  catch (e) { showToast('No se ha podido generar el PDF.', 'warning'); }
-});
-
-btnExportPDFCompleto.addEventListener('click', () => {
-  try { exportPDFCompleto(); showToast('PDF del logbook completo descargado correctamente ✓'); }
+btnExportPDF.addEventListener('click', () => {
+  try { exportPDF(exportActividadSelect.value); showToast('PDF descargado ✓'); }
   catch (e) { showToast('No se ha podido generar el PDF.', 'warning'); }
 });
 
@@ -807,5 +880,6 @@ btnExportPDFCompleto.addEventListener('click', () => {
 // ---------------------------------------------------------------------------
 
 populateActivitySelect();
+populateExportSelect();
 renderDashboard();
 renderLogbook();
