@@ -24,12 +24,15 @@
     <!-- PANTALLA 1: REGISTRO -->
     <section id="screen-registro" class="screen">
       <div id="registro-inicio">
-        <button id="btn-nuevo-registro" class="btn btn-primary btn-big">+ Nuevo registro</button>
-        <p class="hint">Elige la actividad, rellena los datos y guarda. Todos los datos se guardan solo en este dispositivo.</p>
+        <button id="btn-dictar" class="btn btn-voice btn-big">🎤 Dictar registro por voz</button>
+        <p id="voice-status" class="voice-status"></p>
+        <button id="btn-nuevo-registro" class="btn btn-primary btn-big">+ Nuevo registro manual</button>
+        <p class="hint">Dicta o rellena a mano. Al dictar, di la actividad, el número de historia (NHC), la matrona y el centro. La fecha se pone sola (hoy). Después revisa y guarda. Todos los datos se guardan en este dispositivo y en tu cuenta de la nube.</p>
       </div>
 
       <form id="form-registro" class="hidden">
         <div id="edit-banner" class="review-banner hidden">✏️ Estás editando un registro existente.</div>
+        <div id="voice-banner" class="review-banner hidden">🎤 He rellenado lo que entendí (en verde). Revisa, completa lo que falte y pulsa Guardar.</div>
         <fieldset class="block">
           <legend>Actividad</legend>
           <label for="actividad" class="visually-hidden">¿Qué actividad vas a registrar?</label>

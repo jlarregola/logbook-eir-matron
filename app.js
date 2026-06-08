@@ -444,6 +444,8 @@ function openManualForm() {
   formFields.innerHTML = '';
   syncPickerSelection('');
   setEditingUI(false);
+  const vb = document.getElementById('voice-banner');
+  if (vb) vb.classList.add('hidden');
   formInicio.classList.add('hidden');
   form.classList.remove('hidden');
 }
@@ -455,6 +457,8 @@ function closeForm(skipConfirm) {
   formFields.innerHTML = '';
   syncPickerSelection('');
   setEditingUI(false);
+  const vb = document.getElementById('voice-banner');
+  if (vb) vb.classList.add('hidden');
   form.classList.add('hidden');
   formInicio.classList.remove('hidden');
   return true;
@@ -556,6 +560,169 @@ form.addEventListener('submit', event => {
 
 if (btnGuardarOtro) {
   btnGuardarOtro.addEventListener('click', () => submitForm(true));
+}
+
+// ---------------------------------------------------------------------------
+// Dictado por voz (Web Speech API) — rellena el formulario hablando
+// ---------------------------------------------------------------------------
+
+const btnDictar = document.getElementById('btn-dictar');
+const voiceStatus = document.getElementById('voice-status');
+const voiceBanner = document.getElementById('voice-banner');
+
+// Reglas para reconocer la actividad por palabras clave (de más a menos específica)
+const ACTIVITY_VOICE_RULES = [
+  { re: /ces[aá]rea|instrumentaci[oó]n/, key: 'instrumentacion_cesareas' },
+  { re: /domicili/, key: 'visitas_domiciliarias' },
+  { re: /preparaci[oó]n.*(nacimiento|parto)/, key: 'preparacion_nacimiento' },
+  { re: /menopausia/, key: 'grupos_menopausia' },
+  { re: /intervenci[oó]n grupal|educaci[oó]n sexual|educaci[oó]n reproductiva|grupal/, key: 'intervenciones_grupales' },
+  { re: /muestra|citolog|frotis|anal[ií]tica/, key: 'toma_muestras' },
+  { re: /gestante/, key: 'gestantes_riesgo' },
+  { re: /(cuidados especiales)|((reci[eé]n nacid|neonato|\brn\b).*especial)/, key: 'rn_especiales' },
+  { re: /reci[eé]n nacid|neonato|\brn\b/, key: 'rn_sanos' },
+  { re: /pu[eé]rpera|puerperio/, key: 'supervision_puerperas' },
+  { re: /prenatal/, key: 'reconocimientos_prenatales' },
+  { re: /(parto|parturienta).*(alto riesgo)|(alto riesgo).*(parto|parturienta)/, key: 'parturientas_alto_riesgo' },
+  { re: /(parto|parturienta).*(bajo riesgo)|(bajo riesgo).*(parto|parturienta)/, key: 'parturientas_bajo_riesgo' },
+  { re: /parto (normal|eut[oó]cico|vaginal)|eut[oó]cico|parto/, key: 'partos_normales' },
+  { re: /\bits\b|\bets\b|transmisi[oó]n/, key: 'asesoramiento_its' },
+  { re: /contracep|anticoncep|contraceptiv|anticonceptiv|sexual/, key: 'asesoramiento_contraceptivo' },
+  { re: /climaterio/, key: 'asesoramiento_climaterio' },
+  { re: /j[oó]ven|adolescente/, key: 'asesoramiento_jovenes' },
+  { re: /ginecolog/, key: 'asesoramiento_ginecologia' },
+  { re: /historia|entrevista/, key: 'historia_og' }
+];
+
+function detectActivityFromVoice(t) {
+  for (const rule of ACTIVITY_VOICE_RULES) {
+    if (rule.re.test(t)) return rule.key;
+  }
+  return null;
+}
+
+function capitalizeName(s) {
+  return s.trim().split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
+function extractNHC(text) {
+  const norm = text.replace(/(\d)[\s.]+(\d)/g, '$1$2'); // une dígitos dichos por separado
+  let m = norm.match(/(?:historia(?:\s*cl[ií]nica)?|nhc|n[uú]mero|hc)\D{0,4}(\d{2,})/i);
+  if (m) return m[1];
+  m = norm.match(/\d{3,}/);
+  return m ? m[0] : null;
+}
+
+function extractMatrona(text) {
+  const re = /(?:matrona(?:\s+responsable)?|responsable)\s+(?:es\s+|la\s+)?([a-záéíóúñ]+(?:\s+[a-záéíóúñ]+){0,2}?)(?=\s+(?:en|del|de|centro|nhc|historia|hospital|cap|y|n[uú]mero)\b|[,.;]|$)/i;
+  const m = text.match(re);
+  return m ? capitalizeName(m[1]) : null;
+}
+
+function extractCentroFromVoice(t) {
+  if (/hospital|verge|cinta|hutvc/.test(t)) return 'Hospital Verge de la Cinta (HUTVC)';
+  if (/la se[nñ]ia|se[nñ]ia/.test(t)) return 'CAP La Senia';
+  if (/temple/.test(t)) return 'CAP Temple';
+  if (/baix ebre/.test(t)) return 'CAP Baix Ebre';
+  if (/ulldecona/.test(t)) return 'CAP Ulldecona';
+  if (/aldea/.test(t)) return 'CAP Aldea';
+  if (/deltebre/.test(t)) return 'CAP Deltebre';
+  if (/roquetes/.test(t)) return 'CAP Roquetes';
+  if (/amposta/.test(t)) return 'CAP Amposta';
+  if (/almetlla|ametlla/.test(t)) return "CAP L'Almetlla";
+  return null;
+}
+
+function extractTipoMuestra(t) {
+  if (/citolog/.test(t)) return 'Citología';
+  if (/frotis/.test(t)) return 'Frotis';
+  if (/anal[ií]tica|sangre/.test(t)) return 'Analítica';
+  if (/orina/.test(t)) return 'Orina';
+  return null;
+}
+
+function yesterdayISO() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
+// Rellena el formulario a partir del texto dictado. Devuelve la actividad detectada (o null).
+function applyVoiceTranscript(text) {
+  const t = text.toLowerCase();
+  const actKey = detectActivityFromVoice(t);
+
+  openManualForm();
+
+  if (!actKey) {
+    voiceBanner.classList.add('hidden');
+    showToast('No reconocí la actividad. Elígela tú y completa el resto.', 'warning');
+    return null;
+  }
+
+  selectActivity(actKey);
+
+  function markFill(name, val) {
+    if (val == null || val === '') return;
+    const el = formFields.querySelector('[name="' + name + '"]');
+    if (!el) return;
+    el.value = val;
+    el.classList.add('field-detected');
+  }
+
+  // Fecha: hoy por defecto (ya la pone selectActivity); "ayer" si lo dice
+  const dateEl = formFields.querySelector('input[type="date"]');
+  if (dateEl) {
+    if (/\bayer\b/.test(t)) dateEl.value = yesterdayISO();
+    dateEl.classList.add('field-detected');
+  }
+
+  markFill('nhc', extractNHC(text));
+  markFill('responsable', extractMatrona(text));
+
+  const centro = extractCentroFromVoice(t);
+  if (centro) {
+    const sel = formFields.querySelector('.centro-select');
+    if (sel) { sel.value = centro; sel.classList.add('field-detected'); }
+  }
+
+  if (actKey === 'toma_muestras') markFill('tipo_muestra', extractTipoMuestra(t));
+
+  voiceBanner.classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  return actKey;
+}
+
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+if (SpeechRecognitionAPI) {
+  recognition = new SpeechRecognitionAPI();
+  recognition.lang = 'es-ES';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+}
+
+if (btnDictar && recognition) {
+  btnDictar.addEventListener('click', () => {
+    btnDictar.classList.add('listening');
+    voiceStatus.textContent = '🎙️ Escuchando... habla ahora';
+    try { recognition.start(); } catch (e) { recognition.stop(); }
+  });
+  recognition.addEventListener('result', event => {
+    const transcript = event.results[0][0].transcript;
+    voiceStatus.textContent = 'Reconocido: "' + transcript + '"';
+    applyVoiceTranscript(transcript);
+  });
+  recognition.addEventListener('error', () => {
+    voiceStatus.textContent = 'No se entendió el audio. Inténtalo otra vez o usa el formulario manual.';
+    btnDictar.classList.remove('listening');
+  });
+  recognition.addEventListener('end', () => { btnDictar.classList.remove('listening'); });
+} else if (btnDictar) {
+  btnDictar.addEventListener('click', () => {
+    showToast('El dictado por voz no está disponible en este navegador. Prueba con Chrome o Safari, o usa el formulario manual.', 'warning');
+  });
 }
 
 function recordCreatedAt(id) {
