@@ -193,6 +193,11 @@ body {
   margin: 10px 0 4px;
 }
 
+.block label .req {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
 .block input,
 .block select,
 .block textarea {
