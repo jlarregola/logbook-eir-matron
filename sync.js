@@ -22,10 +22,31 @@
   function ready() { return !!(sb && currentUser); }
 
   function getOutbox() {
-    try { return JSON.parse(localStorage.getItem(OUTBOX_KEY)) || { deletes: {} }; }
-    catch (e) { return { deletes: {} }; }
+    let o;
+    try { o = JSON.parse(localStorage.getItem(OUTBOX_KEY)) || {}; }
+    catch (e) { o = {}; }
+    if (!o.deletes) o.deletes = {};
+    if (!o.upserts) o.upserts = {}; // ids de registros pendientes de subir
+    return o;
   }
   function setOutbox(o) { localStorage.setItem(OUTBOX_KEY, JSON.stringify(o)); }
+
+  // Reintento de sincronización con pequeño retardo (agrupa varios cambios seguidos)
+  let syncTimer = null;
+  function scheduleSync() {
+    if (!ready() || !online()) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => cloudSyncNow(), 4000);
+  }
+
+  // Sube filas en bloques (evita peticiones gigantes en la primera sincronización)
+  async function upsertChunked(table, rows, conflict) {
+    const SIZE = 200;
+    for (let i = 0; i < rows.length; i += SIZE) {
+      const { error } = await sb.from(table).upsert(rows.slice(i, i + SIZE), { onConflict: conflict });
+      if (error) throw error;
+    }
+  }
 
   function setStatus(text) {
     const el = document.getElementById('cuenta-estado');
@@ -80,6 +101,8 @@
     });
 
     window.addEventListener('online', () => { if (ready()) cloudSyncNow(); });
+    // Al volver a primer plano (reabrir la app), reconciliar por si quedó algo pendiente
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && ready()) scheduleSync(); });
 
     wireAuthButtons();
   }
@@ -145,29 +168,40 @@
     syncing = true;
     setStatus('Sincronizando…');
     try {
-      // 1) Enviar borrados pendientes (marcadores "deleted")
       const outbox = getOutbox();
+
+      // 1) Enviar borrados pendientes (marcadores "deleted")
       const delIds = Object.keys(outbox.deletes || {});
       if (delIds.length) {
         const delRows = delIds.map(id => ({ id, user_id: currentUser.id, data: {}, deleted: true, updated_at: outbox.deletes[id] || nowISO() }));
-        const { error } = await sb.from('registros').upsert(delRows, { onConflict: 'id' });
-        if (!error) { outbox.deletes = {}; setOutbox(outbox); }
+        await upsertChunked('registros', delRows, 'id');
+        outbox.deletes = {};
+        setOutbox(outbox);
       }
 
-      // 2) Traer todo lo remoto
-      const { data: remoteRows, error: pullErr } = await sb.from('registros').select('*');
-      if (pullErr) throw pullErr;
+      // 2) Traer TODO lo remoto, paginando (clave para recuperar más de 1000 registros)
+      const remoteRows = [];
+      const PAGE = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error: pullErr } = await sb.from('registros').select('*').range(from, from + PAGE - 1);
+        if (pullErr) throw pullErr;
+        if (!data || data.length === 0) break;
+        remoteRows.push.apply(remoteRows, data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
 
       const localById = {};
       getRecords().forEach(r => { localById[r.id] = r; });
       const remoteById = {};
-      (remoteRows || []).forEach(row => { remoteById[row.id] = row; });
+      remoteRows.forEach(row => { remoteById[row.id] = row; });
 
-      // 3) Aplicar remoto -> local (gana la versión más reciente)
-      (remoteRows || []).forEach(row => {
+      // 3) Aplicar remoto -> local (gana la versión más reciente; en empate, CONSERVAR el dato)
+      remoteRows.forEach(row => {
         const local = localById[row.id];
         if (row.deleted) {
-          if (local && tnum(recTime(local)) <= tnum(row.updated_at)) delete localById[row.id];
+          if (local && tnum(recTime(local)) < tnum(row.updated_at)) delete localById[row.id];
         } else if (!local || tnum(recTime(local)) < tnum(row.updated_at)) {
           const rec = row.data || {};
           rec.id = row.id;
@@ -176,17 +210,21 @@
         }
       });
 
-      // 4) Enviar a la nube lo local que falta o es más nuevo
+      // 4) Enviar a la nube lo local que falta, es más nuevo, o quedó pendiente (outbox)
       const toPush = [];
       Object.keys(localById).forEach(id => {
         const l = localById[id];
         const rem = remoteById[id];
-        if (!rem || rem.deleted || tnum(recTime(l)) > tnum(rem.updated_at)) toPush.push(rowFromRecord(l));
+        if (!rem || rem.deleted || tnum(recTime(l)) > tnum(rem.updated_at) || outbox.upserts[id]) {
+          toPush.push(rowFromRecord(l));
+        }
       });
       if (toPush.length) {
-        const { error } = await sb.from('registros').upsert(toPush, { onConflict: 'id' });
-        if (error) throw error;
+        await upsertChunked('registros', toPush, 'id');
       }
+      // Todo lo pendiente de subir se ha subido
+      outbox.upserts = {};
+      setOutbox(outbox);
 
       // 5) Guardar el resultado fusionado en el móvil
       saveRecords(Object.keys(localById).map(k => localById[k]));
@@ -196,12 +234,14 @@
 
       if (typeof renderDashboard === 'function') renderDashboard();
       if (typeof renderLogbook === 'function') renderLogbook();
-      setStatus('✓ Sincronizado · ' + new Date().toLocaleTimeString('es-ES'));
-      if (manual) showToast('Sincronizado ✓');
+      const total = Object.keys(localById).length;
+      setStatus('✓ Sincronizado · ' + total + ' registros · ' + new Date().toLocaleTimeString('es-ES'));
+      if (manual) showToast('Sincronizado ✓ (' + total + ' registros)');
     } catch (e) {
       console.error('Error de sincronización:', e);
-      setStatus('No se pudo sincronizar (se reintentará automáticamente).');
+      setStatus('No se pudo sincronizar del todo (se reintentará automáticamente).');
       if (manual) showToast('No se pudo sincronizar ahora. Revisa tu conexión.', 'warning');
+      scheduleSync(); // reintento automático
     } finally {
       syncing = false;
     }
@@ -222,10 +262,23 @@
 
   // --- ganchos llamados desde app.js ---
   function cloudUpsert(record) {
-    if (!ready() || !online()) return;
+    // Marcamos el registro como "pendiente de subir" SIEMPRE (sobrevive a cierres de la app).
+    // Solo se quita cuando confirmamos que llegó a la nube.
+    const outbox = getOutbox();
+    outbox.upserts[record.id] = true;
+    setOutbox(outbox);
+
+    if (!ready() || !online()) return; // sin sesión/conexión: subirá en la próxima sincronización
     sb.from('registros').upsert([rowFromRecord(record)], { onConflict: 'id' }).then(({ error }) => {
-      if (error) console.error(error);
-      else setStatus('✓ Sincronizado · ' + new Date().toLocaleTimeString('es-ES'));
+      if (error) {
+        console.error(error);
+        scheduleSync(); // reintento automático
+      } else {
+        const o = getOutbox();
+        delete o.upserts[record.id];
+        setOutbox(o);
+        setStatus('✓ Guardado en la nube · ' + new Date().toLocaleTimeString('es-ES'));
+      }
     });
   }
 

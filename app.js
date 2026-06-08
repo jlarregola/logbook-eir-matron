@@ -265,6 +265,7 @@ navButtons.forEach(btn => {
     if (target === 'dashboard') renderDashboard();
     if (target === 'logbook') renderLogbook();
     if (target === 'exportar') populateExportSelect();
+    if (target === 'cuenta' && window.cloudSyncNow && window.cloudLoggedIn && window.cloudLoggedIn()) window.cloudSyncNow();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 });
@@ -1297,6 +1298,11 @@ function importBackup(file) {
       showToast('La copia no contiene registros válidos.', 'warning');
       return;
     }
+
+    // Restaurar es una acción intencionada ("quiero estos datos"): los sellamos como
+    // recientes para que ganen al sincronizar y no los elimine un borrado antiguo de la nube.
+    const stamp = new Date().toISOString();
+    valid.forEach(r => { r.updated_at = stamp; });
 
     // Fusión por id (no se duplican ni se pierden los registros que ya tienes)
     const byId = {};
