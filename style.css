@@ -28,7 +28,8 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-size: 16px;
-  padding-bottom: 72px; /* espacio para la barra inferior */
+  /* espacio para la barra inferior + zona segura en móviles con notch/indicador */
+  padding-bottom: calc(80px + env(safe-area-inset-bottom));
 }
 
 .app-header {
@@ -99,6 +100,20 @@ body {
   background: var(--color-primary);
 }
 
+.toast { display: flex; align-items: center; justify-content: center; gap: 12px; }
+
+.toast-action {
+  background: rgba(255, 255, 255, 0.25);
+  border: none;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 /* Botones */
 .btn {
   display: block;
@@ -135,12 +150,14 @@ body {
   cursor: not-allowed;
 }
 
-.btn-voice {
+.btn-voice,
+.btn-accent {
   background: var(--color-accent);
   color: #fff;
 }
 
-.btn-voice:active {
+.btn-voice:active,
+.btn-accent:active {
   background: #69764c;
 }
 
@@ -274,6 +291,7 @@ body {
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   box-shadow: 0 -2px 8px rgba(70, 58, 48, 0.08);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .nav-btn {
@@ -459,4 +477,30 @@ body {
   color: var(--color-text-muted);
   padding: 32px 16px;
   font-size: 0.9rem;
+}
+
+/* Resalta la tarjeta de fecha de inicio cuando aún no se ha configurado */
+.progress-item.config-empty {
+  border-color: var(--color-primary);
+  background: var(--color-primary-tint);
+}
+
+/* Pantalla de exportar */
+.export-label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+}
+
+.export-sep {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 26px 0 16px;
+}
+
+.export-subtitle {
+  font-size: 1rem;
+  color: var(--color-primary-dark);
+  margin: 0 0 4px;
 }

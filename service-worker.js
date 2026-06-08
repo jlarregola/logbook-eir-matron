@@ -1,6 +1,6 @@
 // Service Worker — funcionamiento 100% offline (esencial: en el paritorio puede no haber wifi)
 
-const CACHE_NAME = 'logbook-eir-matron-v6';
+const CACHE_NAME = 'logbook-eir-matron-v7';
 
 const APP_SHELL = [
   './',
@@ -9,13 +9,14 @@ const APP_SHELL = [
   './app.js',
   './manifest.json',
   './icon.svg',
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
+  './jspdf.umd.min.js'
 ];
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(APP_SHELL))
+      // Cacheamos cada archivo por separado: si uno fallara, no se cae toda la instalación
+      .then(cache => Promise.all(APP_SHELL.map(url => cache.add(url).catch(() => null))))
       .then(() => self.skipWaiting())
   );
 });
@@ -28,21 +29,24 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Estrategia: cache primero, red como respaldo (y guarda en caché lo que llegue por red)
+// Estrategia "stale-while-revalidate": responde al instante con lo cacheado, pero
+// en segundo plano descarga la última versión y la guarda para la próxima vez.
+// Así las mejoras llegan al teléfono sin quedarse atascado en una versión antigua.
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
     caches.match(event.request).then(cached => {
-      if (cached) return cached;
-
-      return fetch(event.request).then(response => {
+      const networkFetch = fetch(event.request).then(response => {
         if (response && response.status === 200) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
         }
         return response;
       }).catch(() => cached);
+
+      // Si hay copia en caché, la usamos ya (rápido y offline); si no, esperamos a la red
+      return cached || networkFetch;
     })
   );
 });

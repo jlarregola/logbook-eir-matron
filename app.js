@@ -27,10 +27,10 @@ const FIELD_DEFS = {
   dia:               { name: 'dia',               label: 'Día',                       type: 'date',   required: true },
   fecha:             { name: 'fecha',             label: 'Fecha',                     type: 'date',   required: true },
   fecha_inicio:      { name: 'fecha_inicio',      label: 'Fecha inicio',              type: 'date',   required: true },
-  fecha_fin:         { name: 'fecha_fin',         label: 'Fecha finalización',        type: 'date' },
+  fecha_fin:         { name: 'fecha_fin',         label: 'Fecha finalización (opcional)', type: 'date' },
   nhc:               { name: 'nhc',               label: 'NHC',                       type: 'text',   placeholder: 'Nº de historia clínica', inputmode: 'numeric' },
-  centro:            { name: 'centro',            label: 'Centro',                    type: 'centro' },
-  centro_realiza:    { name: 'centro',            label: 'Centro en el que se realiza', type: 'centro' },
+  centro:            { name: 'centro',            label: 'Centro',                    type: 'centro', required: true },
+  centro_realiza:    { name: 'centro',            label: 'Centro en el que se realiza', type: 'centro', required: true },
   tipo_muestra:      { name: 'tipo_muestra',      label: 'Tipo muestra',              type: 'text',   placeholder: 'ej. citología, frotis, analítica...' },
   num_participantes: { name: 'num_participantes', label: 'Nº de participantes',       type: 'number' },
   num_sesiones:      { name: 'num_sesiones',      label: 'Nº Sesiones',               type: 'number' },
@@ -127,15 +127,30 @@ function primaryDate(record) {
 // ---------------------------------------------------------------------------
 
 function getRecords() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return [];
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
+    // Datos dañados: NO los pisamos (podrían recuperarse). Guardamos una copia y avisamos.
+    if (!window.__corruptHandled) {
+      window.__corruptHandled = true;
+      try { localStorage.setItem(STORAGE_KEY + '__corrupto', raw); } catch (_) {}
+      setTimeout(() => showToast('Aviso: los datos guardados parecen dañados. Se ha conservado una copia interna. Restaura tu última copia de seguridad desde Exportar.', 'warning'), 600);
+    }
     return [];
   }
 }
 
+// Devuelve true si se guardó correctamente; false si el almacenamiento está lleno o falla.
 function saveRecords(records) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 function generateId() {
@@ -157,9 +172,11 @@ function recordYear(record) {
   const startDate = new Date(start);
   const recordDate = new Date(fecha);
   if (isNaN(startDate.getTime()) || isNaN(recordDate.getTime())) return null;
-  const months = (recordDate.getFullYear() - startDate.getFullYear()) * 12 + (recordDate.getMonth() - startDate.getMonth());
-  if (months < 0) return null;
-  return months < 12 ? 1 : 2;
+  if (recordDate < startDate) return null;
+  // Año 1 = primeros 12 meses exactos desde el inicio (comparando la fecha completa, no solo el mes)
+  const anniversary = new Date(startDate);
+  anniversary.setFullYear(anniversary.getFullYear() + 1);
+  return recordDate < anniversary ? 1 : 2;
 }
 
 // Asigna el "Nº" de cada registro: orden cronológico dentro de su actividad (1, 2, 3...)
@@ -172,7 +189,11 @@ function sequenceMap() {
   Object.keys(byActivity).forEach(key => {
     byActivity[key]
       .slice()
-      .sort((a, b) => (primaryDate(a) + a.created_at).localeCompare(primaryDate(b) + b.created_at))
+      .sort((a, b) => {
+        const ka = (primaryDate(a) || '') + '|' + (a.created_at || '') + '|' + a.id;
+        const kb = (primaryDate(b) || '') + '|' + (b.created_at || '') + '|' + b.id;
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      })
       .forEach((r, i) => { map[r.id] = i + 1; });
   });
   return map;
@@ -184,17 +205,30 @@ function sequenceMap() {
 
 let toastTimer = null;
 
-function showToast(message, type) {
+function showToast(message, type, action) {
   let toast = document.getElementById('app-toast');
   if (!toast) {
     toast = document.createElement('div');
     toast.id = 'app-toast';
     document.body.appendChild(toast);
   }
-  toast.textContent = message;
+  toast.innerHTML = '';
+  const span = document.createElement('span');
+  span.textContent = message;
+  toast.appendChild(span);
+  if (action && action.label && typeof action.fn === 'function') {
+    const btn = document.createElement('button');
+    btn.className = 'toast-action';
+    btn.textContent = action.label;
+    btn.addEventListener('click', () => {
+      toast.classList.remove('show');
+      action.fn();
+    });
+    toast.appendChild(btn);
+  }
   toast.className = 'toast show' + (type === 'warning' ? ' warning' : '');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), action ? 6500 : 3200);
 }
 
 // ---------------------------------------------------------------------------
@@ -213,7 +247,17 @@ const navButtons = document.querySelectorAll('.nav-btn');
 navButtons.forEach(btn => {
   btn.addEventListener('click', () => {
     const target = btn.dataset.screen;
-    navButtons.forEach(b => b.classList.toggle('active', b === btn));
+    // Si hay un registro a medio rellenar y se va a otra pantalla, avisar antes de descartarlo
+    if (target !== 'registro' && formHasInput()) {
+      if (!confirm('¿Salir sin guardar el registro que estás rellenando?')) return;
+      closeForm(true);
+    }
+    navButtons.forEach(b => {
+      const isActive = b === btn;
+      b.classList.toggle('active', isActive);
+      if (isActive) b.setAttribute('aria-current', 'page');
+      else b.removeAttribute('aria-current');
+    });
     Object.keys(screens).forEach(name => {
       screens[name].classList.toggle('hidden', name !== target);
     });
@@ -232,8 +276,11 @@ const formInicio = document.getElementById('registro-inicio');
 const form = document.getElementById('form-registro');
 const btnNuevoRegistro = document.getElementById('btn-nuevo-registro');
 const btnCancelar = document.getElementById('btn-cancelar');
+const btnGuardar = document.getElementById('btn-guardar');
+const btnGuardarOtro = document.getElementById('btn-guardar-otro');
 const actividadSelect = document.getElementById('actividad');
 const formFields = document.getElementById('form-fields');
+const editBanner = document.getElementById('edit-banner');
 
 let editingRecordId = null;
 
@@ -259,7 +306,7 @@ function renderFieldHtml(token) {
     const opts = CENTROS.map(c => `<option value="${c}">${c}</option>`).join('');
     return `
       <label for="${id}">${f.label}${reqMark}</label>
-      <select id="${id}" name="${f.name}" class="centro-select">
+      <select id="${id}" name="${f.name}" class="centro-select"${reqAttr}>
         <option value="">— Selecciona —</option>
         ${opts}
         <option value="__otro__">Otro...</option>
@@ -305,39 +352,79 @@ function buildFormForActivity(key) {
   if (firstDate && !firstDate.value) firstDate.value = todayISO();
 }
 
+// ¿Hay algo escrito en el formulario? (para avisar antes de descartar)
+function formHasInput() {
+  if (form.classList.contains('hidden')) return false;
+  if (actividadSelect.value) return true;
+  return Array.from(formFields.querySelectorAll('input, select, textarea')).some(el => el.value && el.value.trim() !== '');
+}
+
+function setEditingUI(isEditing) {
+  actividadSelect.disabled = isEditing;
+  if (editBanner) editBanner.classList.toggle('hidden', !isEditing);
+  if (btnGuardar) btnGuardar.textContent = isEditing ? 'Guardar cambios' : 'Guardar registro';
+  if (btnGuardarOtro) btnGuardarOtro.classList.toggle('hidden', isEditing);
+}
+
 function openManualForm() {
   editingRecordId = null;
   form.reset();
   actividadSelect.value = '';
   formFields.innerHTML = '';
+  setEditingUI(false);
   formInicio.classList.add('hidden');
   form.classList.remove('hidden');
 }
 
-function closeForm() {
+function closeForm(skipConfirm) {
+  if (!skipConfirm && formHasInput() && !confirm('¿Descartar este registro sin guardar?')) return false;
   editingRecordId = null;
   form.reset();
   formFields.innerHTML = '';
+  setEditingUI(false);
   form.classList.add('hidden');
   formInicio.classList.remove('hidden');
+  return true;
 }
 
 btnNuevoRegistro.addEventListener('click', openManualForm);
-btnCancelar.addEventListener('click', closeForm);
+btnCancelar.addEventListener('click', () => closeForm());
 
 actividadSelect.addEventListener('change', () => {
   if (!editingRecordId) buildFormForActivity(actividadSelect.value);
 });
 
-form.addEventListener('submit', event => {
-  event.preventDefault();
-
+// Guarda el formulario. keepOpen=true ("Guardar y añadir otro") deja el formulario
+// abierto con la misma actividad para registrar varios seguidos sin volver a elegirla.
+function submitForm(keepOpen) {
   if (!actividadSelect.value) {
     showToast('Selecciona una actividad.', 'warning');
+    actividadSelect.focus();
+    actividadSelect.scrollIntoView({ block: 'center', behavior: 'smooth' });
     return;
   }
 
+  // Validación nativa de los campos obligatorios (muestra el aviso junto al campo)
+  if (!form.reportValidity()) return;
+
   const act = getActivity(actividadSelect.value);
+
+  // Si eligió "Otro..." en un centro, comprobamos que escribió el nombre
+  for (const token of act.fields) {
+    const f = FIELD_DEFS[token];
+    if (f.type === 'centro') {
+      const sel = formFields.querySelector(`[name="${f.name}"]`);
+      if (sel && sel.value === '__otro__') {
+        const otro = formFields.querySelector(`[name="${f.name}_otro"]`);
+        if (!otro || !otro.value.trim()) {
+          showToast('Escribe el nombre del centro.', 'warning');
+          if (otro) { otro.focus(); otro.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+          return;
+        }
+      }
+    }
+  }
+
   const formData = new FormData(form);
   const record = {
     id: editingRecordId || generateId(),
@@ -345,7 +432,6 @@ form.addEventListener('submit', event => {
     actividad: act.key
   };
 
-  // Solo guardamos los campos que pertenecen a esta actividad
   act.fields.forEach(token => {
     const f = FIELD_DEFS[token];
     let value = formData.get(f.name);
@@ -362,15 +448,37 @@ form.addEventListener('submit', event => {
   } else {
     records.push(record);
   }
-  saveRecords(records);
+
+  if (!saveRecords(records)) {
+    showToast('No se pudo guardar: el almacenamiento del teléfono está lleno. Guarda una copia de seguridad y libera espacio.', 'warning');
+    return; // no cerramos el formulario: los datos siguen en pantalla
+  }
 
   const wasEditing = !!editingRecordId;
-  closeForm();
-
-  showToast(wasEditing ? 'Registro actualizado correctamente ✓' : 'Registro guardado correctamente ✓');
   renderDashboard();
   renderLogbook();
+
+  if (keepOpen && !wasEditing) {
+    const sameActivity = act.key;
+    editingRecordId = null;
+    buildFormForActivity(sameActivity); // limpia los campos y vuelve a poner la fecha de hoy
+    setEditingUI(false);
+    showToast('Guardado ✓ Añade el siguiente');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } else {
+    closeForm(true);
+    showToast(wasEditing ? 'Registro actualizado correctamente ✓' : 'Registro guardado correctamente ✓');
+  }
+}
+
+form.addEventListener('submit', event => {
+  event.preventDefault();
+  submitForm(false);
 });
+
+if (btnGuardarOtro) {
+  btnGuardarOtro.addEventListener('click', () => submitForm(true));
+}
 
 function recordCreatedAt(id) {
   const existing = getRecords().find(r => r.id === id);
@@ -424,11 +532,14 @@ function renderDashboard() {
   dashboardLista.innerHTML = '';
 
   // Tarjeta de configuración: fecha de inicio de la residencia
+  const startSet = !!getResidencyStart();
   const configCard = document.createElement('div');
-  configCard.className = 'progress-item';
+  configCard.className = 'progress-item' + (startSet ? '' : ' config-empty');
   configCard.innerHTML = `
     <div class="label-row"><span class="name">📅 Fecha de inicio de la residencia</span></div>
-    <p class="projection" style="margin-top:0;">Se usa para separar Año 1 / Año 2 y para calcular la proyección de ritmo.</p>
+    <p class="projection" style="margin-top:0;">${startSet
+      ? 'Se usa para separar Año 1 / Año 2 y para calcular la proyección de ritmo.'
+      : '👇 Añade aquí tu fecha de inicio para ver el progreso por año y la proyección de ritmo.'}</p>
     <input type="date" id="residency-start-input" value="${getResidencyStart()}">
   `;
   dashboardLista.appendChild(configCard);
@@ -606,6 +717,7 @@ function editRecord(id) {
     }
   });
 
+  setEditingUI(true);
   formInicio.classList.add('hidden');
   form.classList.remove('hidden');
   document.querySelector('.nav-btn[data-screen="registro"]').click();
@@ -613,12 +725,32 @@ function editRecord(id) {
 }
 
 function deleteRecord(id) {
-  if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
-  const records = getRecords().filter(r => r.id !== id);
-  saveRecords(records);
+  const records = getRecords();
+  const idx = records.findIndex(r => r.id === id);
+  if (idx === -1) return;
+  if (!confirm('¿Eliminar este registro? Podrás deshacerlo durante unos segundos.')) return;
+
+  const removed = records[idx];
+  records.splice(idx, 1);
+  if (!saveRecords(records)) {
+    showToast('No se pudo eliminar (error de almacenamiento).', 'warning');
+    return;
+  }
   renderLogbook();
   renderDashboard();
-  showToast('Registro eliminado.');
+
+  showToast('Registro eliminado.', undefined, {
+    label: 'Deshacer',
+    fn: () => {
+      const recs = getRecords();
+      if (!recs.some(r => r.id === removed.id)) recs.push(removed);
+      if (saveRecords(recs)) {
+        renderLogbook();
+        renderDashboard();
+        showToast('Registro restaurado ✓');
+      }
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -862,18 +994,98 @@ const btnExportPDF = document.getElementById('btn-export-pdf');
 
 btnExportTXT.addEventListener('click', () => {
   try { exportTXT(exportActividadSelect.value); showToast('Hoja de texto descargada ✓'); }
-  catch (e) { showToast('No se ha podido generar el archivo de texto.', 'warning'); }
+  catch (e) { console.error(e); showToast('No se ha podido generar el archivo de texto.', 'warning'); }
 });
 
 btnExportCSV.addEventListener('click', () => {
   try { exportCSV(exportActividadSelect.value); showToast('Hoja de cálculo descargada ✓'); }
-  catch (e) { showToast('No se ha podido generar el CSV.', 'warning'); }
+  catch (e) { console.error(e); showToast('No se ha podido generar el CSV.', 'warning'); }
 });
 
 btnExportPDF.addEventListener('click', () => {
   try { exportPDF(exportActividadSelect.value); showToast('PDF descargado ✓'); }
-  catch (e) { showToast('No se ha podido generar el PDF.', 'warning'); }
+  catch (e) { console.error(e); showToast('No se ha podido generar el PDF.', 'warning'); }
 });
+
+// ---------------------------------------------------------------------------
+// Copia de seguridad (.json): la ÚNICA forma de recuperar los datos si se
+// pierde, formatea o cambia de teléfono. Se puede volver a importar en la app.
+// ---------------------------------------------------------------------------
+
+function exportBackup() {
+  const data = {
+    app: 'logbook-eir-matrona',
+    version: 1,
+    exported_at: new Date().toISOString(),
+    residency_start: getResidencyStart(),
+    records: getRecords()
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8;' });
+  downloadBlob(blob, `copia_seguridad_logbook_${todayStamp()}.json`);
+}
+
+function importBackup(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data;
+    try {
+      data = JSON.parse(reader.result);
+    } catch (e) {
+      console.error(e);
+      showToast('El archivo no es una copia de seguridad válida.', 'warning');
+      return;
+    }
+    const incoming = Array.isArray(data) ? data : (data && data.records);
+    if (!Array.isArray(incoming)) {
+      showToast('El archivo no contiene registros reconocibles.', 'warning');
+      return;
+    }
+    const valid = incoming.filter(r => r && typeof r === 'object' && r.id && r.actividad);
+    if (valid.length === 0) {
+      showToast('La copia no contiene registros válidos.', 'warning');
+      return;
+    }
+
+    // Fusión por id (no se duplican ni se pierden los registros que ya tienes)
+    const byId = {};
+    getRecords().forEach(r => { byId[r.id] = r; });
+    valid.forEach(r => { byId[r.id] = r; });
+    const merged = Object.keys(byId).map(k => byId[k]);
+
+    if (!saveRecords(merged)) {
+      showToast('No se pudo guardar la copia: almacenamiento lleno.', 'warning');
+      return;
+    }
+    if (data && data.residency_start && !getResidencyStart()) {
+      setResidencyStart(data.residency_start);
+    }
+    renderDashboard();
+    renderLogbook();
+    showToast(`Copia restaurada ✓ (${valid.length} registros)`);
+  };
+  reader.onerror = () => showToast('No se pudo leer el archivo.', 'warning');
+  reader.readAsText(file);
+}
+
+const btnExportBackup = document.getElementById('btn-export-backup');
+const btnImportBackup = document.getElementById('btn-import-backup');
+const importFileInput = document.getElementById('import-file');
+
+if (btnExportBackup) {
+  btnExportBackup.addEventListener('click', () => {
+    try { exportBackup(); showToast('Copia de seguridad guardada ✓'); }
+    catch (e) { console.error(e); showToast('No se ha podido crear la copia.', 'warning'); }
+  });
+}
+
+if (btnImportBackup && importFileInput) {
+  btnImportBackup.addEventListener('click', () => importFileInput.click());
+  importFileInput.addEventListener('change', () => {
+    const file = importFileInput.files && importFileInput.files[0];
+    if (file) importBackup(file);
+    importFileInput.value = ''; // permite volver a elegir el mismo archivo
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Inicialización
